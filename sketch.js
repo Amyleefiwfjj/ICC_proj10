@@ -182,6 +182,6 @@ class Bar {
     let ratio = constrain((temp - globalMinTemp) / (globalMaxTemp - globalMinTemp), 0, 1);
     let r = lerp(0, 255, ratio);
     let b = lerp(255, 0, ratio);
-    return color(r, 0, b);
+    return color(r, 0, b, 160);
   }
 }
