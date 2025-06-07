@@ -562,7 +562,7 @@ function setup() {
 }
 
 function draw() {
-    background(188, 226, 235);
+    background(160, 220, 245);
     orbitControl();
     ambientLight(150);
     directionalLight(255, 255, 255, 0, -1, -1);
