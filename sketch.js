@@ -1,12 +1,11 @@
-let img, table, font;
+let img, tempTable, rainTable, font, gl;
 let cities = [];
-let currentIdx = 0;
-let lang = 'ko';
-let unit = 'C';
-const API_KEY = '';
-let gl;
+let currentIdx = 0;          // 0–11: month index, or 'avg'
+const planeSize = 800;
+let lang = 'ko', unit = 'C';
+const API_KEY = '';          // OpenWeather API key if you want realtime data
 
-// 자치도 위치
+// 자치도별 3D 위치
 const regionCoords = {
     '경기도': { x: -60, z: -230 },
     '강원도': { x: 100, z: -230 },
@@ -19,11 +18,13 @@ const regionCoords = {
     '제주특별자치도': { x: -160, z: 300 }
 };
 
+// 다국어 레이블
 const I18N = {
     ko: { avg: '평균', feels: '체감', rain: '강수', uv: '자외선', prep: '준비물' },
     en: { avg: 'Avg', feels: 'Feels', rain: 'Rain', uv: 'UV', prep: 'Gear' }
 };
 
+// 의류/준비물 추천
 function clothingAdvice(tC) {
     if (tC >= 28) return '🍦 반팔·선크림';
     if (tC >= 22) return '👕 가벼운 옷';
@@ -34,72 +35,126 @@ function clothingAdvice(tC) {
 
 function preload() {
     font = loadFont('./data/Title.ttf');
-    table = loadTable('./data/data.csv', 'csv', 'header');
+    tempTable = loadTable('./data/temp.csv', 'csv', 'header');
+    rainTable = loadTable('./data/rain.csv', 'csv', 'header');
     img = loadImage('./data/Layer1.png');
 }
 
 function setup() {
-    createCanvas(windowWidth, windowHeight, WEBGL);
+    createCanvas(planeSize, planeSize, WEBGL);
     gl = this._renderer;
-    textFont(font); textSize(12); textAlign(CENTER, CENTER); noStroke();
+
+    textFont(font);
+    textSize(12);
+    textAlign(CENTER, CENTER);
+    noStroke();
     angleMode(RADIANS);
 
-    // CSV 파싱
-    const monthsCount = table.getRowCount();
-    const regions = table.columns.filter(c => c !== '일시');
-    regions.forEach(region => {
-        if (!(region in regionCoords)) return;
+    // CSV 파싱: 월 수, 자치도 리스트
+    const monthsCount = tempTable.getRowCount();
+    const regions = tempTable.columns.filter(c => c !== '일시');
+
+    // cities 배열 생성
+    for (let region of regions) {
+        if (!(region in regionCoords)) continue;
+        const coords = regionCoords[region];
+
+        // 온도/강수량 데이터 읽기
         const temps = [];
+        const rains = [];
         for (let i = 0; i < monthsCount; i++) {
-            const n = parseFloat(table.getString(i, region));
-            temps.push(isNaN(n) ? 0 : n);
+            const t = parseFloat(tempTable.getString(i, region));
+            const r = parseFloat(rainTable.getString(i, region));
+            temps.push(isNaN(t) ? 0 : t);
+            rains.push(isNaN(r) ? 0 : r);
         }
-        const avg = temps.reduce((a, b) => a + b, 0) / monthsCount;
-        cities.push({ ...regionCoords[region], region, temps, avg, currentH: 0, targetH: 0, extra: {} });
-    });
+
+        // 평균 계산
+        const avgT = temps.reduce((a, b) => a + b, 0) / monthsCount;
+        const avgR = rains.reduce((a, b) => a + b, 0) / monthsCount;
+
+        cities.push({
+            ...coords,
+            region,
+            temps, rains,
+            avgT, avgR,
+            currentTempH: 0, targetTempH: 0,
+            currentRainH: 0, targetRainH: 0,
+            extra: {}
+        });
+    }
 
     // 월 버튼 생성
-    const mb = select('#monthButtons');
-    for (let i = 0; i < monthsCount; i++) {
-        const lbl = table.getString(i, '일시');
-        const btn = createButton(lbl).addClass('month-btn');
-        btn.parent(mb);
-        btn.mousePressed(() => selectMonth(i));
+    for (let i = 0; i < tempTable.getRowCount(); i++) {
+        const label = tempTable.getString(i, '일시');
+        createButton(label)
+            .position(10 + i * 60, height + 10)
+            .mousePressed(() => selectMonth(i));
     }
-    const avgBtn = createButton(I18N[lang].avg).addClass('month-btn');
-    avgBtn.parent(mb).mousePressed(() => selectMonth('avg'));
+    // 평균 버튼
+    createButton(I18N[lang].avg)
+        .position(10 + tempTable.getRowCount() * 60, height + 10)
+        .mousePressed(() => selectMonth('avg'));
 
-    // 언어/단위 토글
-    select('#langSel').changed(() => updateInfo());
-    select('#unitSel').changed(() => updateInfo());
+    // 언어·단위 토글
+    select('#langSel').changed(e => { lang = e.target.value; updateInfo(); });
+    select('#unitSel').changed(e => { unit = e.target.value; updateInfo(); });
 
+    // 초기 설정
     selectMonth(0);
     updateInfo();
     if (API_KEY) fetchRealtime();
 }
 
-function windowResized() {
-    resizeCanvas(windowWidth, windowHeight);
-}
-
 function draw() {
     background(188, 226, 235);
-    orbitControl(); ambientLight(150);
+    orbitControl();
+    ambientLight(150);
     directionalLight(255, 255, 255, 0, -1, -1);
 
-    push(); rotateX(HALF_PI); texture(img); plane(windowWidth, windowHeight); pop();
+    // 지도 바닥 (PNG 비율 유지 필요하면 별도 처리)
+    push();
+    rotateX(HALF_PI);
+    texture(img);
+    plane(planeSize, planeSize);
+    pop();
 
-    cities.forEach(c => {
-        c.currentH = lerp(c.currentH, c.targetH, 0.05);
-        const h = c.currentH;
-        push(); translate(c.x, -h / 2, c.z); ambientMaterial(200, 100, 200); box(20, h, 20); pop();
-        push(); translate(c.x, -h - 10, c.z); fill(0); text(c.region, 0, 0); pop();
-    });
+    // 막대 그리기
+    const barOffset = 15;      // 템프와 레인 바 사이 간격
+    const tempScale = 5;      // 온도 스케일
+    const rainScale = 0.3;    // 강수 스케일 (필요에 따라 조정)
+
+    for (let c of cities) {
+        // 애니메이션 보간
+        c.currentTempH = lerp(c.currentTempH, c.targetTempH, 0.05);
+        c.currentRainH = lerp(c.currentRainH, c.targetRainH, 0.05);
+
+        // 온도 막대 (보라)
+        push();
+        translate(c.x - barOffset, -c.currentTempH / 2, c.z);
+        ambientMaterial(200, 100, 200);
+        box(15, c.currentTempH, 15);
+        pop();
+
+        // 강수량 막대 (파랑)
+        push();
+        translate(c.x + barOffset, -c.currentRainH / 2, c.z);
+        ambientMaterial(100, 150, 255);
+        box(15, c.currentRainH, 15);
+        pop();
+
+        // 자치도 이름
+        push();
+        translate(c.x, -max(c.currentTempH, c.currentRainH) - 10, c.z);
+        fill(0);
+        text(c.region, 0, 0);
+        pop();
+    }
 
     handleTooltip();
 }
 
-// 3D→2D 투영 헬퍼
+// 3D→2D 투영
 function worldToScreen(x, y, z) {
     const mv = gl.uMVMatrix.mat4;
     const p = gl.uPMatrix.mat4;
@@ -116,60 +171,75 @@ function worldToScreen(x, y, z) {
         p[2] * mvv[0] + p[6] * mvv[1] + p[10] * mvv[2] + p[14] * mvv[3],
         p[3] * mvv[0] + p[7] * mvv[1] + p[11] * mvv[2] + p[15] * mvv[3]
     ];
-    const ndcX = clip[0] / clip[3];
-    const ndcY = clip[1] / clip[3];
-    return { x: (ndcX * 0.5 + 0.5) * width, y: (1 - (ndcY * 0.5 + 0.5)) * height };
+    const ndcX = clip[0] / clip[3], ndcY = clip[1] / clip[3];
+    return {
+        x: (ndcX * 0.5 + 0.5) * width,
+        y: (1 - (ndcY * 0.5 + 0.5)) * height
+    };
 }
 
 function handleTooltip() {
-    const tip = select('#tooltip');
-    const footer = select('#footer');
+    const tip = document.getElementById('tooltip');
     let shown = false;
-    cities.forEach(c => {
-        if (shown) return;
-        const pos = worldToScreen(c.x, -c.currentH / 2, c.z);
+    for (let c of cities) {
+        const pos = worldToScreen(c.x, -c.currentTempH / 2, c.z);
         if (dist(mouseX, mouseY, pos.x, pos.y) < 12) {
-            const baseT = (currentIdx === 'avg' ? c.avg : c.temps[currentIdx]);
-            const dispT = (unit === 'F' ? (baseT * 9 / 5 + 32).toFixed(1) : baseT.toFixed(1));
-            let html = `<b>${c.region}</b><br>${dispT}°${unit}`;
-            if (c.extra.feels !== undefined) {
-                const feels = (unit === 'F' ? (c.extra.feels * 9 / 5 + 32).toFixed(1) : c.extra.feels.toFixed(1));
-                html += `<br>${I18N[lang].feels}: ${feels}°${unit}`;
-                html += `<br>${I18N[lang].rain}: ${c.extra.rain}%`;
-                html += `<br>${I18N[lang].uv}: ${c.extra.uv}`;
-            }
+            // 온도
+            const baseT = (currentIdx === 'avg' ? c.avgT : c.temps[currentIdx]);
+            const dispT = unit === 'F'
+                ? (baseT * 9 / 5 + 32).toFixed(1)
+                : baseT.toFixed(1);
+            // 강수
+            const baseR = (currentIdx === 'avg' ? c.avgR : c.rains[currentIdx]);
+            const dispR = `${baseR.toFixed(1)} mm`;
+
+            const suf = '°' + unit;
+            let html = `<b>${c.region}</b><br>${dispT}${suf}`;
+            html += `<br>${I18N[lang].rain}: ${dispR}`;
             html += `<br>${I18N[lang].prep}: ${clothingAdvice(baseT)}`;
-            tip.html(html).style('left', pos.x + 15 + 'px').style('top', pos.y + 15 + 'px').show();
-            // 하단 footer 업데이트
-            footer.html(`${dispT}°${unit}`);
+
+            tip.innerHTML = html;
+            tip.style.left = pos.x + 15 + 'px';
+            tip.style.top = pos.y + 15 + 'px';
+            tip.style.display = 'block';
             shown = true;
+            break;
         }
-    });
-    if (!shown) {
-        tip.hide();
-        select('#footer').html('');
     }
+    if (!shown) tip.style.display = 'none';
 }
 
 function selectMonth(idx) {
     currentIdx = idx;
-    cities.forEach(c => c.targetH = ((idx === 'avg' ? c.avg : c.temps[idx]) * 5));
+    for (let c of cities) {
+        const t = (idx === 'avg' ? c.avgT : c.temps[idx]);
+        const r = (idx === 'avg' ? c.avgR : c.rains[idx]);
+        c.targetTempH = t * 5;       // 필요하면 스케일 조정
+        c.targetRainH = r * 0.3;     // 필요하면 스케일 조정
+    }
     updateInfo();
-    select('#footer').html('');
 }
 
 function updateInfo() {
-    const info = select('#info');
-    const label = (currentIdx === 'avg' ? I18N[lang].avg : table.getString(currentIdx, '일시'));
-    info.html(`<b>${label}</b><br>°${unit}`);
+    const info = document.getElementById('info');
+    const label = (currentIdx === 'avg')
+        ? I18N[lang].avg
+        : tempTable.getString(currentIdx, '일시');
+
+    // 전체 평균 온도
+    let sum = 0;
+    cities.forEach(c => sum += (currentIdx === 'avg' ? c.avgT : c.temps[currentIdx]));
+    const avgTemp = sum / cities.length;
+    const dispAvg = unit === 'F'
+        ? (avgTemp * 9 / 5 + 32).toFixed(1)
+        : avgTemp.toFixed(1);
+
+    info.innerHTML = `<b>${label}</b><br>${dispAvg}°${unit}`;
 }
 
 async function fetchRealtime() {
     for (let c of cities) {
-        const url = `https://api.openweathermap.org/data/3.0/onecall?lat=${c.lat}&lon=${c.lon}&units=metric&appid=${API_KEY}`;
-        try {
-            const js = await fetch(url).then(r => r.json()), cur = js.current;
-            c.extra = { feels: cur.feels_like, rain: cur.pop ? Math.round(cur.pop * 100) : 0, uv: cur.uvi };
-        } catch (_) { }
+        // 위도/경도 필드가 있다면 추가 가능
+        // c.extra = { ... }
     }
 }
