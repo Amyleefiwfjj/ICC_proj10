@@ -76,7 +76,7 @@ function selectMonth(idx) {
 }
 
 function draw() {
-    background(200);
+    background(188, 226, 235);
     orbitControl();
     ambientLight(150);
     directionalLight(255, 255, 255, 0, -1, -1);
