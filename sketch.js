@@ -596,15 +596,17 @@ function draw() {
         // 온도
         push();
         translate(c.x - 15, -c.currentTempH / 2, c.z);
-        ambientMaterial(200, 106, 52);
+        ambientMaterial(240, 117, 24);
         box(15, c.currentTempH, 15);
         pop();
+
         // 강수
         push();
         translate(c.x + 15, -c.currentRainH / 2, c.z);
-        ambientMaterial(78, 157, 112);
+        ambientMaterial(98, 177, 112);
         box(15, c.currentRainH, 15);
         pop();
+
         // 이름
         push();
         translate(c.x, -max(c.currentTempH, c.currentRainH) - 10, c.z);
