@@ -1,25 +1,29 @@
-// sketch2.js
+// sketch2.js  (module)
+
 import { preloadWebGL, setupWebGL, drawWebGL, worldToScreen } from './webglRenderer.js';
 
-let headerImg, tempTable, rainTable, font;
+/* ---------- 전역 변수 ---------- */
+let font, tempTable, rainTable;
 let cities = [];
 let currentIdx = 0;
-const planeSize = 800;
 let lang = 'ko', unit = 'C';
-function preload() {
-  // 3D 텍스처
-  preloadWebGL();
-  // 폰트·CSV
-  font       = loadFont('./data/Title.ttf');
-  tempTable  = loadTable('./data/temp.csv','csv','header');
-  rainTable  = loadTable('./data/rain.csv','csv','header');
-}
-// 1) 초단기 실황조회 엔드포인트
-const urlBase = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst';
 
-const serviceKey = 'g3VCISjBuFhV9qzkIbePvL/7msDm8LHzAXBiZbWjVl6hDpZr4UwxMVP+WBrE9r7NAXtgWlsOP1HpspngAFo+jw==';
-// ───── 도별 격자(nx, ny) 좌표 ─────
-const regionCoords  = {
+
+const api        = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst';
+const serviceKey = 'g3VCISjBuFhV9qz…Fo%2Bjw%3D%3D';  // **포털에서 받은 “Encoding” 키**
+const proxy      = 'https://late-dust-3081.amylee2804.workers.dev/?url=';
+function makeKmaUrl({ base_date, base_time, nx, ny }) {
+  // serviceKey는 이미 인코딩된 상태이므로 그대로 넣습니다
+  const qs = new URLSearchParams({
+    serviceKey,
+    pageNo: 1, numOfRows: 1000, dataType: 'JSON',
+    base_date, base_time, nx, ny
+  }).toString();
+  return `${api}?${qs}`;    // <-- “?...” 형태의 완전한 URL
+}
+
+// 도별 격자
+const regionGrids = {
   '경기도':       { nx: 60, ny:122 },
   '강원도':       { nx: 73, ny:134 },
   '충청북도':     { nx: 69, ny:107 },
@@ -31,89 +35,71 @@ const regionCoords  = {
   '제주특별자치도': { nx: 52, ny: 38 }
 };
 
-function setup() {
-  // WebGL 캔버스
-  setupWebGL();
-
-  // Header 이미지 → 캔버스·툴팁 위치 보정
-  headerImg = select('#headerImg');
-  headerImg.elt.onload = () => canvasPosition(headerImg.elt.naturalHeight);
-
-  // CSV → cities 배열 초기화
-  const monthsCount = tempTable.getRowCount();
-  const regions = tempTable.columns.filter(c => c !== '일시');
-  for (let region of regions) {
-    if (!(region in regionCoords)) continue;
-    const { x, z } = regionCoords[region];
-    const temps = [], rains = [];
-    for (let i = 0; i < monthsCount; i++) {
-      const t = parseFloat(tempTable.getString(i, region));
-      const r = parseFloat(rainTable.getString(i, region));
-      temps.push(isNaN(t)?0:t);
-      rains.push(isNaN(r)?0:r);
-    }
-    const avgT = temps.reduce((a,b)=>a+b,0)/monthsCount;
-    const avgR = rains.reduce((a,b)=>a+b,0)/monthsCount;
-    cities.push({ x, z, region, temps, rains, avgT, avgR,
-                  currentTempH:0, targetTempH:0,
-                  currentRainH:0, targetRainH:0 });
-  }
-function draw() {
-  // 3D 장면 렌더링 + 툴팁
-  drawWebGL(cities);
+function preload() {
+  preloadWebGL();                                     // 지도 텍스처
+  font      = loadFont('./data/Title.ttf');
+  tempTable = loadTable('./data/temp.csv','csv','header');
+  rainTable = loadTable('./data/rain.csv','csv','header');
 }
-  // 툴팁 스타일링 (이전과 동일)
-  // 언어·단위 드롭다운 바인딩 (이전과 동일)
-  // 월별 버튼 생성 (이전과 동일)
 
-  selectMonth(0);
-  updateInfo();
+function setup() { setupWebGL(); /* + UI 준비 */ }
+function draw()  { drawWebGL(cities); handleTooltip(); }
 
-  // → 실시간 API 최초 호출 및 주기 갱신
-  fetchNow();
-  setInterval(fetchNow, 10*60*1000);
+/* ---------- API 호출 ---------- */
+function buildUrl(paramsObj) {
+  const qs = new URLSearchParams(paramsObj).toString();
+  return `${cors}${api}?serviceKey=${serviceKey}&${qs}`;
 }
-// 3) 호출 함수
-async function fetchNow() {
+
+function yyyymmddhh() {
   const now = new Date();
+  if (now.getMinutes() < 40) now.setHours(now.getHours() - 1);    // 40분 보정
   const pad = n => String(n).padStart(2,'0');
-  const base_date = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}`;
-  const base_time = pad(now.getHours()-1) + '00';
+  return {
+    base_date: `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}`,
+    base_time: `${pad(now.getHours())}00`
+  };
+}
 
-  for (let [region, {nx, ny}] of Object.entries(regionCoords)) {
-    const url = new URL(urlBase);
-    url.searchParams.set('serviceKey', serviceKey);
-    url.searchParams.set('pageNo',    '1');         // ← 필수
-    url.searchParams.set('numOfRows', '1000');      // ← 필수
-    url.searchParams.set('dataType',   'JSON');
-    url.searchParams.set('base_date',  base_date);
-    url.searchParams.set('base_time',  base_time);
-    url.searchParams.set('nx',         nx);
-    url.searchParams.set('ny',         ny);
+async function fetchNow() {
+  const { base_date, base_time } = yyyymmddhh();
 
-    try {
-      const res  = await fetch(url);
-      const data = await res.json();
+  for (const [region, { nx, ny }] of Object.entries(regionGrids)) {
+    // 1) build the original KMA endpoint URL
+    const rawUrl = makeKmaUrl({ base_date, base_time, nx, ny });
 
-      const header = data.response.header;
-      if (header.resultCode !== '00') {
-        console.error(`${region} 조회 실패: ${header.resultMsg}`);
-        continue;
-      }
+    // 2) wrap it in your Cloudflare Worker proxy
+    const fetchUrl = proxy + encodeURIComponent(rawUrl);
 
-      const items = data.response.body.items.item;
-      const t1h   = items.find(i => i.category==='T1H')?.obsrValue;
-      const rn1   = items.find(i => i.category==='RN1')?.obsrValue || 0;
-      console.log(region, '기온:', t1h+'℃', '강수:', rn1+'mm');
+    // 3) hit the proxy
+    const responseText = await (await fetch(fetchUrl)).text();
 
-      // → cities 배열에 반영: ...
+    // 4) if it starts with “<”, it’s XML (an error from KMA), so skip
+    if (responseText.trim().startsWith('<')) {
+      console.error(region, 'XML error:', responseText.slice(0,120));
+      continue;
     }
-    catch (e) {
-      console.error(`${region} 예외 발생:`, e);
+
+    // 5) parse the JSON and check resultCode
+    const data = JSON.parse(responseText);
+    const header = data.response.header;
+    if (header.resultCode !== '00') {
+      console.error(region, 'KMA error:', header.resultMsg);
+      continue;
+    }
+
+    // 6) extract and apply to your cities[]
+    const items = data.response.body.items.item;
+    const T1H = +items.find(i => i.category==='T1H')?.obsrValue || NaN;
+    const RN1 = +items.find(i => i.category==='RN1')?.obsrValue || 0;
+    const city = cities.find(c => c.region === region);
+    if (city && !isNaN(T1H)) {
+      city.targetTempH = T1H * 5;
+      city.targetRainH = RN1 * 0.3;
     }
   }
 }
 
-// 4) 실행
+// initial load + repeat
 fetchNow();
-setInterval(fetchNow, 10*60*1000);
+setInterval(fetchNow, 10 * 60 * 1000);
