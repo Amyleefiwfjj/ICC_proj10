@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Korea Climate 3D Map</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 230px;
+            /* header(160px) + margin(40px) */
+            left: 30px;
+            /* 캔버스 왼쪽에서 80px 지점 */
+            width: 220px;
+            /* 프로토타입 비율에 맞춘 너비 */
+            height: 80px;
+            /* 프로토타입 비율에 맞춘 높이 */
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            font-family: sans-serif;
+            z-index: 10;
+        }
+
+        #tooltip {
+            opacity: 0;
+            transform: translate(-10px, -10px) scale(0.95);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        #info {
+            padding: 8px 12px;
+            border-radius: 6px;
+ 
+
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/addons/p5.dom.min.js"></script>
+</head>
+
+<body>
+    <div id="ui-panel">
+        <div>
+            <label>Lang:
+                <select id="langSel">
+                    <option value="ko">한국어</option>
+                    <option value="en">English</option>
+                </select>
+            </label>
+            <label>Unit:
+                <select id="unitSel">
+                    <option value="C">°C</option>
+                    <option value="F">°F</option>
+                </select>
+            </label>
+        </div>
+        <div id="info"></div>
+    </div>
+    <div id="tooltip"></div>
+
+
+    <script src="sketch.js">  </script>
+</body>
+
+</html>
