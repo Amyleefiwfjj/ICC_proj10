@@ -18,12 +18,37 @@ const regionCoords = {
     '제주특별자치도': { x: -160, z: 300 }
 };
 
-// 다국어 레이블
 const I18N = {
-    ko: { avg: '평균', feels: '체감', rain: '강수', uv: '자외선', prep: '추천 관광지' },
-    en: { avg: 'Avg', feels: 'Feels', rain: 'Rain', uv: 'UV', prep: 'recommendation' }
+  ko: {
+    avg: '평균', feels: '체감', rain: '강수', uv: '자외선', prep: '추천 관광지',
+    clothing: [
+      '🍦 반팔·선크림',
+      '👕 가벼운 옷',
+      '👔 긴팔·얇은 겉옷',
+      '🧥 재킷',
+      '🧣 코트·패딩'
+    ]
+  },
+  en: {
+    avg: 'Avg', feels: 'Feels', rain: 'Rain', uv: 'UV', prep: 'recommendation',
+    clothing: [
+      '🍦 T-shirt & sunscreen',
+      '👕 Light clothes',
+      '👔 Long sleeves & light jacket',
+      '🧥 Jacket',
+      '🧣 Coat & padding'
+    ]
+  }
 };
-const attractions = {
+
+function clothingAdvice(tC, locale = 'ko') {
+  const list = I18N[locale].clothing;
+  if (tC >= 28) return list[0];
+  if (tC >= 22) return list[1];
+  if (tC >= 16) return list[2];
+  if (tC >= 10) return list[3];
+  return list[4];
+}const attractions = {
     '경기도': {
         7: [
             { ko: '한국민속촌', en: 'Korean Folk Village' },
@@ -476,15 +501,6 @@ const attractions = {
     }
 };
 
-// 의류/준비물 추천
-function clothingAdvice(tC) {
-    if (tC >= 28) return '🍦 반팔·선크림';
-    if (tC >= 22) return '👕 가벼운 옷';
-    if (tC >= 16) return '👔 긴팔·얇은 겉옷';
-    if (tC >= 10) return '🧥 재킷';
-    return '🧣 코트·패딩';
-}
-
 function preload() {
     font = loadFont('./data/Title.ttf');
     tempTable = loadTable('./data/temp.csv', 'csv', 'header');
@@ -493,8 +509,6 @@ function preload() {
 }
 
 function setup() {
-
-
     // 캔버스
     createCanvas(planeSize, planeSize, WEBGL).style('position', 'absolute');
     gl = this._renderer;
@@ -562,7 +576,7 @@ function setup() {
 }
 
 function draw() {
-    background(160, 220, 245);
+    background(104, 194, 217);    
     orbitControl();
     ambientLight(150);
     directionalLight(255, 255, 255, 0, -1, -1);
@@ -582,17 +596,15 @@ function draw() {
         // 온도
         push();
         translate(c.x - 15, -c.currentTempH / 2, c.z);
-        ambientMaterial(200, 100, 200);
+        ambientMaterial(200, 106, 52);
         box(15, c.currentTempH, 15);
         pop();
-
         // 강수
         push();
         translate(c.x + 15, -c.currentRainH / 2, c.z);
-        ambientMaterial(100, 150, 255);
+        ambientMaterial(78, 157, 112);
         box(15, c.currentRainH, 15);
         pop();
-
         // 이름
         push();
         translate(c.x, -max(c.currentTempH, c.currentRainH) - 10, c.z);
@@ -615,10 +627,10 @@ function canvasPosition(headerHeight) {
         .style('top', `${headerHeight + 50}px`)    // 캔버스 위로부터 50px 내려옴
         .style('width', '260px')
         .style('min-height', '140px')
-        .style('background', '#fff')
+        .style('background', 'rgba(255, 255, 255, 0.77)')
         .style('padding', '12px')
         .style('border-radius', '16px')
-        .style('box-shadow', '0 2px 8px rgba(0,0,0,0.15)')
+        .style('box-shadow', '0 2px 8px rgba(0, 0, 0, 0.04)')
         .style('z-index', '20')
         .style('display', 'none');
 
@@ -630,7 +642,7 @@ function canvasPosition(headerHeight) {
         .style('display', 'flex')
         .style('flex-direction', 'column')    // 세로 정렬
         .style('gap', '10px')
-        .style('background', 'rgba(255,255,255,0.8)')
+        .style('background', 'rgba(255, 255, 255, 0)')
         .style('padding', '8px')
         .style('border-radius', '8px')
         .style('box-shadow', '0 2px 8px rgba(0,0,0,0.1)')
@@ -686,11 +698,13 @@ function handleTooltip() {
             const arr = attractions[c.region]?.[currentIdx] || [];
             const act = arr.map(o => o[lang]).join(', ');
 
+            const cth = clothingAdvice(c.currentTempH);
             tip.html(
                 `<b>${c.region}</b><br>` +
                 `${dT}°${unit}<br>` +
                 `${I18N[lang].rain}: ${dR}<br>` +
-                `${I18N[lang].prep}: ${act}`
+                `${I18N[lang].prep}: ${act}`+
+                ` ${lang === 'ko' ? '옷차림 추천' : 'Clothing'}: ${cth}`
             )
             tip
                 .style('display', 'block')                // <-- 추가
