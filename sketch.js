@@ -19,36 +19,36 @@ const regionCoords = {
 };
 
 const I18N = {
-  ko: {
-    avg: '평균', feels: '체감', rain: '강수', uv: '자외선', prep: '추천 관광지',
-    clothing: [
-      '🍦 반팔·선크림',
-      '👕 가벼운 옷',
-      '👔 긴팔·얇은 겉옷',
-      '🧥 재킷',
-      '🧣 코트·패딩'
-    ]
-  },
-  en: {
-    avg: 'Avg', feels: 'Feels', rain: 'Rain', uv: 'UV', prep: 'recommendation',
-    clothing: [
-      '🍦 T-shirt & sunscreen',
-      '👕 Light clothes',
-      '👔 Long sleeves & light jacket',
-      '🧥 Jacket',
-      '🧣 Coat & padding'
-    ]
-  }
+    ko: {
+        avg: '평균', feels: '체감', rain: '강수', uv: '자외선', prep: '추천 관광지',
+        clothing: [
+            '🍦 반팔·선크림',
+            '👕 가벼운 옷',
+            '👔 긴팔·얇은 겉옷',
+            '🧥 재킷',
+            '🧣 코트·패딩'
+        ]
+    },
+    en: {
+        avg: 'Avg', feels: 'Feels', rain: 'Rain', uv: 'UV', prep: 'recommendation',
+        clothing: [
+            '🍦 T-shirt & sunscreen',
+            '👕 Light clothes',
+            '👔 Long sleeves & light jacket',
+            '🧥 Jacket',
+            '🧣 Coat & padding'
+        ]
+    }
 };
 
 function clothingAdvice(tC, locale = 'ko') {
-  const list = I18N[locale].clothing;
-  if (tC >= 28) return list[0];
-  if (tC >= 22) return list[1];
-  if (tC >= 16) return list[2];
-  if (tC >= 10) return list[3];
-  return list[4];
-}const attractions = {
+    const list = I18N[locale].clothing;
+    if (tC >= 28) return list[0];
+    if (tC >= 22) return list[1];
+    if (tC >= 16) return list[2];
+    if (tC >= 10) return list[3];
+    return list[4];
+} const attractions = {
     '경기도': {
         7: [
             { ko: '한국민속촌', en: 'Korean Folk Village' },
@@ -576,7 +576,7 @@ function setup() {
 }
 
 function draw() {
-    background(104, 194, 217);    
+    background(104, 194, 217);
     orbitControl();
     ambientLight(150);
     directionalLight(255, 255, 255, 0, -1, -1);
@@ -699,14 +699,13 @@ function handleTooltip() {
             // 관광지
             const arr = attractions[c.region]?.[currentIdx] || [];
             const act = arr.map(o => o[lang]).join(', ');
-
             const cth = clothingAdvice(c.currentTempH);
             tip.html(
                 `<b>${c.region}</b><br>` +
                 `${dT}°${unit}<br>` +
                 `${I18N[lang].rain}: ${dR}<br>` +
-                `${I18N[lang].prep}: ${act}`+
-                ` ${lang === 'ko' ? '옷차림 추천' : 'Clothing'}: ${cth}`
+                `${I18N[lang].prep}: ${act}<br>` +  // 여기서 줄바꿈을 추가
+                `${lang === 'ko' ? '옷차림 추천' : 'Clothing'}: ${cth}`
             )
             tip
                 .style('display', 'block')                // <-- 추가
